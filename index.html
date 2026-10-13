@@ -173,9 +173,19 @@ button:focus-visible,a:focus-visible,summary:focus-visible{outline:2px solid var
 .delivery-card summary{min-height:16rem}
 @media(max-width:640px){.delivery-card summary{min-height:0}.vr{gap:1rem}.cat{letter-spacing:.16em}}
 
+
+/* Ribbon Glow — Originkit, adapted to the existing buildless portfolio. */
+#ribbon-glow{position:fixed;inset:0;z-index:0;pointer-events:none;overflow:hidden;background:radial-gradient(ellipse at 70% 45%,rgba(255,59,29,.12),transparent 65%)}
+body{isolation:isolate}main,footer.f{position:relative;z-index:1}
+#ribbon-glow canvas{display:block;width:100%;height:100%;opacity:.32}
+#ribbon-glow:after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,rgba(8,8,10,.3),rgba(8,8,10,.12) 45%,rgba(8,8,10,.3))}
+#ribbon-glow canvas[hidden]{display:none}
+@media(max-width:640px){#ribbon-glow canvas{opacity:.25}}
+
 </style>
 </head>
 <body>
+<div id="ribbon-glow" aria-hidden="true"><canvas></canvas></div>
 <div id="reading-progress" aria-hidden="true"></div>
 <div id="pre"><div class="b d">Ishu Raj</div><div class="c d"><span id="cn">0</span><i>%</i></div></div>
 <header><nav class="t"><a href="#top" class="logo"><span class="mv">IR</span><span class="n">Ishu Raj</span></a>
@@ -185,6 +195,7 @@ button:focus-visible,a:focus-visible,summary:focus-visible{outline:2px solid var
 
 <main>
 <section id="top">
+
 <div class="hrow"><h2 class="roles d" id="roles"></h2>
 <p class="hdesc rv" id="hd">Two months in Facility Management at Cyient Ltd., Noida — turning everyday facility problems into approved, implemented improvements.</p></div>
 <div class="port"><figure class="liq" data-img="portrait" data-sc="30" data-bare="1" role="img" aria-label="Ishu Raj"></figure></div>
@@ -326,5 +337,51 @@ else{window.__stop=1;window.lenis&&lenis.stop();scrollTo(0,0);hero();
 })();
 </script>
 
+<script>
+
+// Ribbon Glow — Originkit. Vanilla WebGL adaptation; original ribbon field retained.
+(()=>{
+ const host=document.getElementById('ribbon-glow'),root=host,canvas=host.querySelector('canvas');
+ const reduce=matchMedia('(prefers-reduced-motion:reduce)'),coarse=matchMedia('(pointer:coarse)');
+ const gl=canvas.getContext('webgl2',{alpha:false,antialias:false,depth:false,stencil:false,powerPreference:'low-power'});
+ if(!gl)return;
+ let program,vao,raf=0,last=0,time=0,lost=false,disposed=false;
+ const shaders=[];
+ function shader(type,source){const s=gl.createShader(type);if(!s)throw Error('Shader unavailable');shaders.push(s);gl.shaderSource(s,source);gl.compileShader(s);if(!gl.getShaderParameter(s,gl.COMPILE_STATUS))throw Error(gl.getShaderInfoLog(s));return s}
+ let u={};
+ function setup(){
+  try{program=gl.createProgram();gl.attachShader(program,shader(gl.VERTEX_SHADER,"#version 300 es\r\nconst vec2 P[3] = vec2[3](vec2(-1.0, -1.0), vec2(3.0, -1.0), vec2(-1.0, 3.0));\r\nvoid main() { gl_Position = vec4(P[gl_VertexID], 0.0, 1.0); }\r\n"));gl.attachShader(program,shader(gl.FRAGMENT_SHADER,"#version 300 es\r\nprecision highp float;\r\nuniform vec2 uRes;\r\nuniform float uTime;\r\nuniform vec3 uC1;\r\nuniform vec3 uC2;\r\nuniform float uSize;\r\nuniform float uAngle;\r\nuniform vec2 uMouse;\r\nuniform float uOn;\r\nuniform float uReach;\r\nuniform vec2 uVel;\r\nout vec4 o;\r\n\r\nconst float TAU = 6.28318530718;\r\nconst float LAYERS = 84.0;\r\nconst float TWIST = 1.250;\r\nconst float DRAG = 0.180;\r\nconst float GAIN = 0.62;\r\nconst vec2 CENTRE = vec2(-0.62, 0.24);\r\nconst float TILT = 0.6;\r\nconst float ZOOM = 1.05;\r\nconst float THETA = 2.13;\r\nconst float SHEAR = 0.963;\r\nconst float SHRINK = 0.953;\r\nconst vec2 WARP_FREQ = vec2(0.42, 2.4);\r\nconst vec2 WARP_AMP = vec2(0.13, 0.027);\r\nconst vec2 ASPECT = vec2(2.1, 0.17);\r\nconst float OFFSET = 0.36;\r\nconst float GLOW = 0.0021;\r\nconst float SOFT = 0.0019;\r\nconst float FALLOFF = 0.37;\r\nconst float PHASE = 12.0;\r\nconst float CYCLE = 0.16;\r\nconst float HUE_TRAVEL = 2.0;\r\n\r\nmat2 rot(float a) { float c = cos(a), s = sin(a); return mat2(c, s, -s, c); }\r\n\r\nvoid main() {\r\n  vec2 R = uRes;\r\n  vec2 pos = (gl_FragCoord.xy - 0.5 * R) / R.y;\r\n\r\n  vec2 d = pos - uMouse;\r\n  float w = uOn * exp(-dot(d, d) / (uReach * uReach));\r\n  if (w > 1e-4) pos = uMouse + rot(w * TWIST) * d * (1.0 - 0.3 * min(w, 1.0)) - uVel * min(w, 1.0) * DRAG;\r\n\r\n  pos = rot(uAngle) * pos / uSize;\r\n  float t = uTime * 0.49 + PHASE;\r\n  float breath = (-sin(uTime * 0.735) + sin(uTime * 0.49 + 1.0)) * 0.25 + 0.5;\r\n  vec2 u = rot(TILT) * ((pos - CENTRE) * (ZOOM - breath * 0.085));\r\n  mat2 fold = mat2(cos(THETA), sin(THETA), -SHEAR, cos(THETA));\r\n\r\n  vec3 col = vec3(0.0);\r\n  for (float i = 1.0; i <= LAYERS; i += 1.0) {\r\n    u.x -= sin(u.y * WARP_FREQ.x + t + i * 0.007) * WARP_AMP.x;\r\n    u.y -= sin(u.x * WARP_FREQ.y - t + i * 0.02) * WARP_AMP.y;\r\n    u = fold * u * SHRINK;\r\n    vec2 q = (u - vec2(OFFSET + breath * 0.1, 0.0)) * ASPECT;\r\n    float g = GLOW / (dot(q, q) + SOFT) * (0.25 + breath * 0.4);\r\n    float r = length(u);\r\n    float k = sin(i * CYCLE + t * 1.2 + r * HUE_TRAVEL) * 0.5 + 0.5;\r\n    col += g * mix(uC1, uC2, k) * (0.62 + 0.5 * k) * exp2(-r * FALLOFF);\r\n  }\r\n  vec3 x = max(col * GAIN, 0.0);\r\n  col = (x * (2.51 * x + 0.03)) / (x * (2.43 * x + 0.59) + 0.14);\r\n  col = pow(clamp(col, 0.0, 1.0), vec3(0.85, 0.92, 0.98));\r\n  col *= 1.0 - smoothstep(0.5, 1.6, length(pos)) * 0.07;\r\n  vec3 bg = vec3(8.0,8.0,10.0)/255.0;\n  o = vec4(bg + col * (1.0-bg), 1.0);\r\n}\r\n"));gl.linkProgram(program);if(!gl.getProgramParameter(program,gl.LINK_STATUS))throw Error(gl.getProgramInfoLog(program));
+   shaders.splice(0).forEach(s=>gl.deleteShader(s));vao=gl.createVertexArray();gl.bindVertexArray(vao);['uRes','uTime','uC1','uC2','uSize','uAngle','uMouse','uOn','uReach','uVel'].forEach(n=>u[n]=gl.getUniformLocation(program,n));return true;
+  }catch(error){shaders.splice(0).forEach(s=>gl.deleteShader(s));if(program)gl.deleteProgram(program);canvas.hidden=true;return false}
+ }
+ if(!setup())return;
+ let w=1,h=1,mx=0,my=0,tx=0,ty=0,vx=0,vy=0,on=0,inside=false;
+ function resize(){const r=root.getBoundingClientRect();w=Math.max(r.width,1);h=Math.max(r.height,1);const scale=Math.min(devicePixelRatio||1,coarse.matches?1:1.25,Math.sqrt((coarse.matches?280000:650000)/(w*h)));canvas.width=Math.max(1,Math.round(w*scale));canvas.height=Math.max(1,Math.round(h*scale));draw(0)}
+ function draw(dt){if(lost||disposed)return;
+  const k=1-Math.exp(-dt*16),nx=mx+(tx-mx)*k,ny=my+(ty-my)*k;
+  if(dt>0){const kv=1-Math.exp(-dt*8);vx+=((nx-mx)/dt-vx)*kv;vy+=((ny-my)/dt-vy)*kv}
+  mx=nx;my=ny;on+=((inside&&!reduce.matches?1:0)-on)*(1-Math.exp(-dt*5));const cap=Math.min(1,3/(Math.hypot(vx,vy)/h||1));
+  gl.viewport(0,0,canvas.width,canvas.height);gl.useProgram(program);gl.bindVertexArray(vao);
+  gl.uniform2f(u.uRes,canvas.width,canvas.height);gl.uniform1f(u.uTime,time);gl.uniform3f(u.uC1,1,.13,.025);gl.uniform3f(u.uC2,1,.46,.12);
+  gl.uniform1f(u.uSize,1.1);gl.uniform1f(u.uAngle,-Math.PI);gl.uniform2f(u.uMouse,(mx-w/2)/h,(h/2-my)/h);gl.uniform1f(u.uOn,on*.8);gl.uniform1f(u.uReach,240/h);gl.uniform2f(u.uVel,vx/h*cap,-vy/h*cap);gl.drawArrays(gl.TRIANGLES,0,3);
+ }
+ function running(){return !disposed&&!lost&&!document.hidden&&!reduce.matches}
+ function frame(now){raf=0;if(!running())return;if(!last)last=now;const elapsed=now-last;if(elapsed>=1000/30){const dt=Math.min(elapsed/1000,.06);last=now;time=(time+dt*.7)%3600;draw(dt)}raf=requestAnimationFrame(frame)}
+ function sync(){cancelAnimationFrame(raf);raf=0;last=0;if(running())raf=requestAnimationFrame(frame);else if(!lost)draw(0)}
+ function move(e){if(coarse.matches||reduce.matches)return;const r=root.getBoundingClientRect();tx=e.clientX-r.left;ty=e.clientY-r.top;if(!inside){mx=tx;my=ty}inside=true}
+ function leave(){inside=false}
+
+ function contextLost(e){e.preventDefault();lost=true;cancelAnimationFrame(raf);canvas.hidden=true;button.hidden=true}
+ function contextRestored(){lost=false;canvas.hidden=false;if(setup()){resize();sync()}}
+ window.addEventListener('pointermove',move,{passive:true});document.documentElement.addEventListener('pointerleave',leave);
+ canvas.addEventListener('webglcontextlost',contextLost);canvas.addEventListener('webglcontextrestored',contextRestored);
+ const ro=new ResizeObserver(resize);ro.observe(root);
+ document.addEventListener('visibilitychange',sync);reduce.addEventListener('change',sync);resize();sync();
+ addEventListener('pagehide',e=>{if(e.persisted){cancelAnimationFrame(raf);return}disposed=true;cancelAnimationFrame(raf);ro.disconnect();document.removeEventListener('visibilitychange',sync);reduce.removeEventListener('change',sync);window.removeEventListener('pointermove',move);document.documentElement.removeEventListener('pointerleave',leave);gl.deleteVertexArray(vao);gl.deleteProgram(program)});
+ addEventListener('pageshow',e=>{if(e.persisted)sync()});
+})();
+
+</script>
 </body>
 </html>
+
